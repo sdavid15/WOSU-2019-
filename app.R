@@ -11,49 +11,42 @@ library(shiny)
 library(dplyr)
 library(tidyverse)
 library(ggplot2)
-library(ggmap)
 library(httr)
 library(XML)
-citation("ggmap")
-library(geosphere)
 library(readxl)
-#install.packages("maps")
-library(maps)
-library(mapproj)
 library(sqldf)
+library(readr)
+#install.packages("tidygraph")
+library(tidygraph)
+#install.packages("ggraph")
+library(ggraph)
+#install.packages("igraph")
+library(igraph)
+ 
 
-dirname <- '~/Desktop/Rshiny/WOSU_2019_Donor'
+
+dirname <- '~/Desktop/Rshiny/WOSU_2019_Donor/Other Metrics'
 if (!dir.exists(dirname))dir.create(dirname,recursive=TRUE)
 
 #Files
-Gift_Final_02 <- read_excel("Gift_Final_02.xlsx")
-# Get US  states abbreviations 
-urlCanadaStates <- "https://www.ncbi.nlm.nih.gov/books/NBK7254/"
-htmlpageCanada <- GET(urlCanadaStates )
-CanadaTabs <-readHTMLTable(rawToChar(htmlpageCanada$content), stringsAsFactors=F)
-USTabs1 <- CanadaTabs[[2]]
-colnames(USTabs1) <- c("State1", "State")
-as_tibble(USTabs1)
-usa <- map_data("usa")
-state <- map_data("state")
-as_tibble(usa)
-as_tibble(state)  
-stll <- read_excel("stll.xlsx")    
-stlab <- USTabs1 %>% right_join(stll, by="State")
-stlab_01 <- stlab %>% filter( !is.na(Latitude))
-all_states <- map_data("state") 
+Gift_Final_03 <- read_excel("Gift_Final_03.xlsx")
+`%notin%` <- Negate(`%in%`)
+
+#static Content
+ 
+
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
    
    # Application title
-   titlePanel("First time Donors - US Demography"),
+   titlePanel("First time Donors - Network Visualization - Most popular Gift Source"),
    
    # Sidebar with a slider input for number of bins 
    sidebarLayout(
      sidebarPanel(
-        sliderInput(inputId = "W1", label = "Donor Count greater than", min = 0, max = 1000, value = 14),
-        sliderInput(inputId = "W2", label = "Donor Count less than", min = 0, max = 1000, value = 100),
+        sliderInput(inputId = "W1", label = "Donation greater than $", min = 0, max = 10000, value = 100),
+        sliderInput(inputId = "W2", label = "Donation less than $", min = 0, max = 10000, value = 350),
         sliderInput(inputId = "W3", label = "Gift Year", min = 2000, max = 2019, value = 2019), 
                     actionButton(inputId = "go", label = "Click Update Year")
         ),
@@ -61,12 +54,9 @@ ui <- fluidPage(
       # Show plot of the generated distribution
       mainPanel(
          htmlOutput("yearText"),
-         htmlOutput("yearText1"),
-         plotOutput("countPlot"),
-         plotOutput("retentionPlot"),
-         plotOutput("genderPlot"),
-         plotOutput("geoPlot"),
-         plotOutput("outsideOHPlot")
+         plotOutput("NWPlot"),
+         dataTableOutput("NWtable")
+         
       )
    )
 )
@@ -74,128 +64,83 @@ ui <- fluidPage(
 # Define server logic required to draw a histogram
 server <- function(input, output) {
   
-  #output$yearText <- eventReactive(input$go, {renderText({paste("Gift Year is","<font color=\"#FF0000\"><b>", input$W3, "</b></font>")})
- # })
+ 
   cap <- eventReactive(input$go, {paste("Gift Year is","<font color=\"#FF0000\"><b>", input$W3, "</b></font>")})
   output$yearText <- renderText({cap()})
-  
-  cap1 <- eventReactive(input$go, {paste("Note: Donor Count Slide bar is only for Fig 1.")})
-  output$yearText1 <- renderText({cap1()})
+  dn1 <- eventReactive(input$go, { input$W1 })
+  dn2 <- eventReactive(input$go, { input$W2 })
   
   
   d <-  eventReactive(input$go, { input$W3 })
-  a <- eventReactive(input$go, { paste("Select * from Gift_Final_02  where Gift_Year=",d(),  sep="") })
-  #output$que <- renderPrint({ a() }) 
+  a <- eventReactive(input$go, { paste("Select * from Gift_Final_03  where Gift_Year=",d(),  sep="") })
+  tableNW <- eventReactive(input$go, {paste("select Account_id, Original_gift_source, city, State, Original_Gift_amount 
+              from Gift_Final_03 where original_gift_amount >=", dn1(), "and original_gift_amount <", dn2(),  
+                                            "and Gift_Year =", d(), 
+              "group by Original_gift_source, city order by Original_gift_source, city")
+  })
+  
+  
+  
   wq <- eventReactive(input$go, {sqldf(a()) })
+  wq1 <- reactive({sqldf(tableNW()) })
   
- 
+  
+ donation_greater_than <- eventReactive(input$go, {input$W1})
+ donation_less_than <- eventReactive(input$go, {input$W2})
   
   
-   output$countPlot <- renderPlot({
-     wq() %>%
-       dplyr::group_by(CitySate) %>%
-       dplyr::summarise(n = n()) %>% 
-       filter(n  >= input$W1 & n <= input$W2) %>%
-       ggplot(aes(x = reorder(as.factor(CitySate), n), y = n)) + 
-       geom_bar(stat = 'identity', fill = "coral1", width = 0.3) +  
-       ggtitle("Fig. 1: Donor counts in Cities") +
-       geom_text(aes(label= n), size = 2.5, position=position_dodge(width=0.2), vjust=-0.25) + 
-       ylab("Donor Counts") + xlab("City-State") +
-       theme(plot.title = element_text(size =10),axis.text.x = element_text(size =7,angle = 45, hjust = 1) ) +
-       theme(panel.background = element_blank()) + theme(axis.line = element_line(colour= "black"))
-   })
-   
-   output$genderPlot <- renderPlot({
-     #wq()$gender <- fct_infreq( wq()$gender)
-     wq() %>%   
-       ggplot(aes(x = gender, y= (..count..)/(sum(..count..))))  +
-       geom_bar(stat="count", fill = "coral1", width = 0.3) + 
-       geom_text(aes(label = scales::percent((..count..)/(sum(..count..))), y =(..count..)/(sum(..count..))), stat = "count", vjust = -.25)  +
-       ggtitle("Overall Yearly Gender Distribution  percentage  ") + labs( x= "Gender ", y= "Percent") +
-       theme(plot.title = element_text(size =10),axis.text.x = element_text(size =7,angle = 45, hjust = 1) ) +
-       theme(panel.background = element_blank()) + theme(axis.line = element_line(colour= "black"))
-     
-     
-   })
-   
-   
-   output$retentionPlot <- renderPlot ({
-     #Gift_19_19$Account_Status<- fct_infreq( Gift_19_19$Account_Status)
-     wq() %>%   
-       ggplot(aes(x = Account_Status, y= (..count..)/(sum(..count..))))  +
-       geom_bar(stat="count", fill = "coral1", width = 0.3) + 
-       geom_text(aes(label = scales::percent((..count..)/(sum(..count..))), y =(..count..)/(sum(..count..))), stat = "count", vjust = -.25)  + ggtitle("Overall Yearly Retention rate  ") + 
-       labs( x= "Account Status", y= "Percent") +
-       theme(plot.title = element_text(size =10),axis.text.x = element_text(size =7,angle = 45, hjust = 1) ) +
-       theme(panel.background = element_blank()) + theme(axis.line = element_line(colour= "black"))
-     
-     
-   })
+   output$NWPlot <- renderPlot({
     
+       nodes <- wq() %>% filter(Original_Gift_Amount >= donation_greater_than() & Original_Gift_Amount < donation_less_than()) %>% 
+         select(Original_Gift_Source) 
+       nodes_01 <- nodes %>%   mutate(type = "Gift_Source")
+       colnames(nodes_01) <- c("name", "type")
+       nodes_02<- unique(nodes_01)
+       
+       nodes_city <- wq() %>% filter(Original_Gift_Amount >= donation_greater_than() & Original_Gift_Amount < donation_less_than()) %>% select(City) 
+       nodes_city_01 <- nodes_city %>% mutate(type = "City")
+       nodes_city_02 <- unique(nodes_city_01)
+       colnames(nodes_city_02) <- c("name", "type")
+       nodes_00_01 <- rbind(nodes_02,nodes_city_02 )
+       nodes_00 <- unique(nodes_00_01)
+       nodes <- nodes_00
+       
+       edges <- wq() %>% filter(Original_Gift_Amount >= donation_greater_than() & Original_Gift_Amount < donation_less_than()) %>% 
+         select(Original_Gift_Source, City, Original_Gift_Amount)
+       colnames(edges) <- c("from", "to", "weight")
+       edges_01 <- unique(edges)
+       edges_01$from <- as.character(edges_01$from)
+       edges_01$to <- as.character(edges_01$to)
+       
+       edges <- edges_01
+       
+       
+       g <- graph_from_data_frame(edges, vertices=nodes, directed=F)
+       
+       g1 <- as_tbl_graph(g)
+       as_tibble(g1 %>% activate(edges))
+       as_tbl_graph(g1) %>%
+         mutate(betweenness=centrality_betweenness(normalized=T)) %>% ggraph() + geom_edge_link(alpha=.1) +
+         geom_node_point(aes(size=betweenness, color=betweenness)) + 
+         scale_color_continuous(guide = 'legend') + 
+         geom_node_text(aes(label = name, size = .1))  
+       
+       
+   })
+  
+   # Print data table
+   output$NWtable = renderDataTable(
+     wq1(),
+     options = list(
+       pageLength = 50)
+       
+   )
+   
+   
    
     
-   
-   output$geoPlot <- renderPlot({
-       
-     bbscnt <- wq() %>% group_by(State) %>% dplyr::summarize(n=n() ) %>% ungroup()
-     as_tibble(bbscnt)
-     stabv <- USTabs1 %>% left_join(bbscnt, by= "State") 
-     stabv$State1 <- tolower(stabv$State1)
-     colnames(stabv) <- c("region", "State", "n")
-     which(stabv$State == "OH")
-     
-     
-     stabv_01 <- stabv %>% filter(!is.na(n))
-     stabv_02 <-  state  %>% left_join(stabv_01, by = "region")
-     
-     all_states <- map_data("state") 
-     # Add more states to the lists if you want
-     states_positive  <-c("ohio")
-     
-     stabv_02 %>% ggplot() + 
-       geom_polygon(aes(x=long, y=lat, group=group, fill = n ), color = "white") +
-        scale_fill_gradientn(colors=c("#2c7bb6","#abd9e9","#ffffbf","#fdae61","#d7191c")) +
-       coord_map() +theme_void() + ggtitle("Overall Yearly Spread of donors-All States")  +
-       geom_text(data=stlab_01, mapping=aes(Longitude, Latitude, label=str_c(State)), size=2) 
-       
-       
-     
-   })  
-     
-   
-     output$outsideOHPlot <- renderPlot({
-       
-       bbscnt <- wq() %>% group_by(State) %>% dplyr::summarize(n=n() ) %>% ungroup()
-       as_tibble(bbscnt)
-       stabv <- USTabs1 %>% left_join(bbscnt, by= "State") 
-       stabv$State1 <- tolower(stabv$State1)
-       colnames(stabv) <- c("region", "State", "n")
-       which(stabv$State == "OH")
-       
-       
-       stabv_01 <- stabv %>% filter(!is.na(n))
-       stabv_02 <-  state  %>% left_join(stabv_01, by = "region")
-       
-       all_states <- map_data("state") 
-       # Add more states to the lists if you want
-       states_positive  <-c("ohio")
-       stabv[41, 3] <- 0
-       stabv_01 <- stabv %>% filter(!is.na(n))
-       stabv_02 <-  state  %>% left_join(stabv_01, by = "region")
-       
-       
-       stabv_02 %>% ggplot() + 
-         geom_polygon(aes(x=long, y=lat, group=group, fill=n), color = "white") +
-         scale_fill_gradientn(colors=c("#2c7bb6","#abd9e9","#ffffbf","#fdae61","#d7191c")) +
-         coord_map() +theme_void() + ggtitle("Overall Yearly Spread of donors-Excluding Ohio")  +
-         geom_text(data=stlab_01, mapping=aes(Longitude, Latitude, label=str_c(State)), size=2)
-       
-     ####
-     
-     
-     
-   })
 }
+
 
 # Run the application 
 shinyApp(ui = ui, server = server)
