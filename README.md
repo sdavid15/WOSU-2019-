@@ -8,22 +8,22 @@ This is to help the WOSU management track donor demography, potential gift sourc
 so that they can extract useful business insights.  
 
 Shinyapp is a free server maintained by RStudio. It is free, easy to use, secure and scalable. This app can help the WOSU management track and extract useful and relevant business insights:
-1.	Donor demography
-a.	Donor counts in cities
-b.	Overall Yearly retention rate
-c.	Overall Yearly gender distribution
-d.	Overall Yearly spread -All states
-e.	Overall Yearly spread – All states- excluding Ohio
+1.	Donor demography.  
+a.	Donor counts in cities.  
+b.	Overall Yearly retention rate.  
+c.	Overall Yearly gender distribution.  
+d.	Overall Yearly spread -All states.  
+e.	Overall Yearly spread – All states- excluding Ohio.  
 
-2.	Potential gift sources  
-a.	Network visualization of Cities and Gift Sources.
+2.	Potential gift sources.    
+a.	Network visualization of Cities and Gift Sources.   
 
-3.	Donation metrics  
-a.	Donor Percentage by Year
-b.	Donors- Original Gift has Premium
-c.	Donors- Solicitation Methods
-d.	Donors – Original Gift Source
-e.	Organizational Donors
+3.	Donation metrics.    
+a.	Donor Percentage by Year. 
+b.	Donors- Original Gift has Premium.  
+c.	Donors- Solicitation Methods.  
+d.	Donors – Original Gift Source.  
+e.	Organizational Donors. 
 
 
 
